@@ -1,0 +1,240 @@
+// Создадим структуру записи таблицы, пусть на 3 столбца (с разными типами данных) 
+// и столбец для id (уникальный идентификатор)
+struct Record{
+  uint64_t id;
+  int height;
+  double size;  
+  string name;  
+}
+
+// Создаем саму таблицу в памяти: используем контейнер map, с ключом id записи.
+std::map<uint64_t, Record> table;
+
+// Для каждого столбца таблицы создаем массив с id-ми записей (далее "сортировочный массив")
+// для хранения уже отсортированных ключей по соответствующему столбцу: используем контейнер list 
+// (почему не вектор? потому что придется удалять значения при вставке и обновлении, list быстрее здесь будет)
+std::list<uint64_t> columnHeight, columnSize, columnName;
+
+// Для идент-ии столбцов
+enum class ColumnType{
+  HEIGHT,
+  SIZE,
+  NAME,
+}
+
+// Мьютекс для мнопоточного использования
+std::mutex mtx;
+
+///////////////////////////////////////////////////////////////////////////////
+/// Серверная сторона
+
+// Напишем все функции, которые можно делать с таблицей: 
+//1. Добавление записи в таблицу: 
+
+   // Для пользователя, потокобезопасно  
+   void addRecord(const Record& rec)  
+   {   
+     std::lock_guard<std::mutex> lck(mtx); 
+	 
+	 if (table.count(rec.id)){   // если нашли, удаляем
+       deleteRecordInternal(rec);
+	 }      
+	 addRecordInternal(rec);
+   }
+   
+   void addRecordInternal(const Record& rec)  
+   {     	 
+     // находим место для вставки в сортировочный массив с помощью бинарного поиска
+	 auto heightPos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.height,
+       [&table](const auto& it, uint64_t height){
+	     return table[*it].height < height;
+	   }
+	 ); 	 
+	 columnHeight.insert(heightPos, rec.id);
+	 
+	 // аналогично для след столбца
+	 auto sizePos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.size,
+       [&table](const auto& it, double size){
+	     return table[*it].size < size;
+	   }
+	 ); 
+	 columnSize.insert(sizePos, rec.id);
+
+     // и для строки
+     auto namePos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.name,
+       [&table](const auto& it, const string& name){
+	     return strcmp(table[*it].name.c_str(), size.c_str()) < 0;  // здесь сишное посимвольное сравнение идет
+ 	   }
+	 ); 
+	 columnName.insert(namePos, rec.id);
+	 
+	 table[rec.id] = rec;               // просто вставляем запись (поскольку у нас map, то будет вставлена с учетом сортировки по ключу)
+   }
+   
+   
+//2. Обновление записи в таблице. 
+//   Здесь для простоты пусть мы не знаем какое поле изменилось, но если бы знали можно было бы трогать не все сортировочные столбцы
+   
+   void updateRecord(const Record& rec)  
+   {
+     std::lock_guard<std::mutex> lck(mtx);
+     	 
+     if (table.count(rec.id)){  
+	   // если нашли, удаляем
+       deleteRecordInternal(rec, false);
+	   
+	   // заново вставляем запись
+       addRecordInternal(rec);
+	 }	 
+   }
+   
+   
+//3. Удаление записи в таблице   
+   void deleteRecord(const Record& rec)  
+   {
+     std::lock_guard<std::mutex> lck(mtx);
+
+     // если нашли, удаляем
+     if (table.count(rec.id)){ 
+	   deleteRecordInternal(rec);
+	 }
+   }
+   
+   void deleteRecordInternal(const Record& rec, bool isDelFromTable = true)
+   {
+     // находим место id в сортировочный массиве с помощью бинарного поиска
+	 auto heightPos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.height,
+       [&table](const std::vector<uint64_t>::iterator& it, uint64_t height){
+	     return table[*it].height < height;
+	   }
+	 ); 	
+	 // удаляем его из сортировочного массива      
+	 columnHeight.erase(heightPos, rec.id);
+	 
+	 // аналогично для след столбца
+	 auto sizePos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.size,
+       [&table](const std::vector<uint64_t>::iterator& it, double size){
+	     return table[*it].size < size;
+	   }
+	 ); 
+	 columnSize.erase(sizePos);
+
+     // и для строки
+     auto namePos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.name,
+       [&table](const std::vector<uint64_t>::iterator& it, string name){
+	     return strcmp(table[*it].name.c_str(), size.c_str()) < 0;  // здесь сишное посимвольное сравнение идет
+ 	   }
+	 ); 
+	 columnName.erase(namePos);
+	 
+	 // удаляем в таблице
+	 table.erase(rec.id);     
+   }
+
+// 4. Выборка данных для клиента
+
+  // Передается позиция скролла в таблице, количество записей для показа и enum столбца, по которому сортировать     
+  std::vector<Record> getRecords(int scroll, int lenght, ColumnType column){
+     std::lock_guard<std::mutex> lck(mtx);
+     
+	 std::vector<Record> ret; 
+	 
+	 size_t tsz = table.size();
+	 if (scroll >= tsz) 
+	   return ret;
+	   
+	 if (scroll + lenght >= tsz) 
+	   lenght = tsz - scroll;
+
+     switch(column){
+	   case ColumnType::HEIGHT: 
+	     for (int i = scroll; i < scroll + lenght; ++i){
+		   ret.emplace_back(table[*(columnHeight.begin() + i)]);
+		 }	
+		 break;
+       case ColumnType::SIZE: 
+	     for (int i = scroll; i < scroll + lenght; ++i){
+		   ret.emplace_back(table[*(columnSize.begin() + i)]);
+		 }	
+		 break;
+       default: 
+	     for (int i = scroll; i < scroll + lenght; ++i){
+		   ret.emplace_back(table[*(columnName.begin() + i)]);
+		 }
+		 break;        
+	 }
+	 
+	 return ret;	 
+  }  
+
+
+
+///////////////////////////////////////////////////////////////////////////////
+/// Клиентская сторона
+
+// Здесь предлагаю в качестве носителя использовать protobuf, протокол tcp. 
+   Вначале посылаем длину сообщения, дальше само сообщение в протобуфе.   
+   
+   Структуры протобуф сообщений:
+   обязательное поле - тип сообщения, и поле с данными для этого типа.
+   
+package bigtable;
+
+message HostMessage {
+    enum MessageType {
+        ADD_RECORD = 1;
+		UPDATE_RECORD = 2;
+		DELETE_RECORD = 3;
+		RECORDS_REQUEST = 4;
+		RECORDS_RESPONSE = 5;
+    }
+    
+    /* Тип столбца*/
+    enum ColumnType {
+        COLUMN_HEIGHT = 1;
+        COLUMN_SIZE = 2;
+		COLUMN_NAME = 3;
+    }
+    
+	/* Запись */
+    message Record {
+        required uint64 id = 1;
+        required int32 height = 2;
+        required double size = 3;
+		required string name = 4;
+	}
+	 
+    /* Запрос на добавление записи */
+    message AddRecordRequest {
+        required Record rec = 1;
+	}
+	
+	/* Запрос на обновление записи */
+    message UpdateRecordRequest {
+        required Record rec = 1;
+	}
+    
+	/* Запрос на удаление записи */
+    message DeleteRecordRequest {
+        required Record rec = 1;
+	}
+	
+	/* Запрос на получение записей */
+    message RecordsRequest{
+        required int scroll = 1;
+		required int lenght = 2;
+		required ColumnType column = 3;
+	}
+	
+	/* Ответ на получение записей */
+    message RecordsResponse {
+        repeated Record recs = 1;
+	}
+	
+    required MessageType type = 1;
+    optional AddRecordRequest add_record_request = 2;
+    optional UpdateRecordRequest update_record_request = 3;
+    optional DeleteRecordRequest delete_record_request = 4;
+    optional RecordsRequest records_request = 5;
+    optional RecordsResponse records_response = 6;    
+}
