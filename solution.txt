@@ -81,7 +81,7 @@ std::mutex mtx;
           
      if (table.count(rec.id)){  
        // если нашли, удаляем
-       deleteRecordInternal(rec, false);
+       deleteRecordInternal(rec);
        
        // заново вставляем запись
        addRecordInternal(rec);
@@ -100,7 +100,7 @@ std::mutex mtx;
      }
    }
    
-   void deleteRecordInternal(const Record& rec, bool isDelFromTable = true)
+   void deleteRecordInternal(const Record& rec)
    {
      // находим место id в сортировочный массиве с помощью бинарного поиска
      auto heightPos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.height,
