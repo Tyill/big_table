@@ -35,40 +35,40 @@ std::mutex mtx;
    void addRecord(const Record& rec)  
    {   
      std::lock_guard<std::mutex> lck(mtx); 
-	 
-	 if (table.count(rec.id)){   // если нашли, удаляем
+     
+     if (table.count(rec.id)){   // если нашли, удаляем
        deleteRecordInternal(rec);
-	 }      
-	 addRecordInternal(rec);
+     }      
+     addRecordInternal(rec);
    }
    
    void addRecordInternal(const Record& rec)  
-   {     	 
+   {          
      // находим место для вставки в сортировочный массив с помощью бинарного поиска
-	 auto heightPos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.height,
+     auto heightPos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.height,
        [&table](const auto& it, uint64_t height){
-	     return table[*it].height < height;
-	   }
-	 ); 	 
-	 columnHeight.insert(heightPos, rec.id);
-	 
-	 // аналогично для след столбца
-	 auto sizePos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.size,
+         return table[*it].height < height;
+       }
+     );      
+     columnHeight.insert(heightPos, rec.id);
+     
+     // аналогично для след столбца
+     auto sizePos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.size,
        [&table](const auto& it, double size){
-	     return table[*it].size < size;
-	   }
-	 ); 
-	 columnSize.insert(sizePos, rec.id);
+         return table[*it].size < size;
+       }
+     ); 
+     columnSize.insert(sizePos, rec.id);
 
      // и для строки
      auto namePos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.name,
        [&table](const auto& it, const string& name){
-	     return strcmp(table[*it].name.c_str(), size.c_str()) < 0;  // здесь сишное посимвольное сравнение идет
- 	   }
-	 ); 
-	 columnName.insert(namePos, rec.id);
-	 
-	 table[rec.id] = rec;               // просто вставляем запись (поскольку у нас map, то будет вставлена с учетом сортировки по ключу)
+         return strcmp(table[*it].name.c_str(), size.c_str()) < 0;  // здесь сишное посимвольное сравнение идет
+        }
+     ); 
+     columnName.insert(namePos, rec.id);
+     
+     table[rec.id] = rec;               // просто вставляем запись (поскольку у нас map, то будет вставлена с учетом сортировки по ключу)
    }
    
    
@@ -78,14 +78,14 @@ std::mutex mtx;
    void updateRecord(const Record& rec)  
    {
      std::lock_guard<std::mutex> lck(mtx);
-     	 
+          
      if (table.count(rec.id)){  
-	   // если нашли, удаляем
+       // если нашли, удаляем
        deleteRecordInternal(rec, false);
-	   
-	   // заново вставляем запись
+       
+       // заново вставляем запись
        addRecordInternal(rec);
-	 }	 
+     }     
    }
    
    
@@ -96,39 +96,39 @@ std::mutex mtx;
 
      // если нашли, удаляем
      if (table.count(rec.id)){ 
-	   deleteRecordInternal(rec);
-	 }
+       deleteRecordInternal(rec);
+     }
    }
    
    void deleteRecordInternal(const Record& rec, bool isDelFromTable = true)
    {
      // находим место id в сортировочный массиве с помощью бинарного поиска
-	 auto heightPos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.height,
+     auto heightPos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.height,
        [&table](const std::vector<uint64_t>::iterator& it, uint64_t height){
-	     return table[*it].height < height;
-	   }
-	 ); 	
-	 // удаляем его из сортировочного массива      
-	 columnHeight.erase(heightPos, rec.id);
-	 
-	 // аналогично для след столбца
-	 auto sizePos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.size,
+         return table[*it].height < height;
+       }
+     );     
+     // удаляем его из сортировочного массива      
+     columnHeight.erase(heightPos, rec.id);
+     
+     // аналогично для след столбца
+     auto sizePos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.size,
        [&table](const std::vector<uint64_t>::iterator& it, double size){
-	     return table[*it].size < size;
-	   }
-	 ); 
-	 columnSize.erase(sizePos);
+         return table[*it].size < size;
+       }
+     ); 
+     columnSize.erase(sizePos);
 
      // и для строки
      auto namePos = std::lower_bound (columnWidth.begin(), columnWidth.end(), rec.name,
        [&table](const std::vector<uint64_t>::iterator& it, string name){
-	     return strcmp(table[*it].name.c_str(), size.c_str()) < 0;  // здесь сишное посимвольное сравнение идет
- 	   }
-	 ); 
-	 columnName.erase(namePos);
-	 
-	 // удаляем в таблице
-	 table.erase(rec.id);     
+         return strcmp(table[*it].name.c_str(), size.c_str()) < 0;  // здесь сишное посимвольное сравнение идет
+        }
+     ); 
+     columnName.erase(namePos);
+     
+     // удаляем в таблице
+     table.erase(rec.id);     
    }
 
 // 4. Выборка данных для клиента
@@ -137,34 +137,34 @@ std::mutex mtx;
   std::vector<Record> getRecords(int scroll, int lenght, ColumnType column){
      std::lock_guard<std::mutex> lck(mtx);
      
-	 std::vector<Record> ret; 
-	 
-	 size_t tsz = table.size();
-	 if (scroll >= tsz) 
-	   return ret;
-	   
-	 if (scroll + lenght >= tsz) 
-	   lenght = tsz - scroll;
+     std::vector<Record> ret; 
+     
+     size_t tsz = table.size();
+     if (scroll >= tsz) 
+       return ret;
+       
+     if (scroll + lenght >= tsz) 
+       lenght = tsz - scroll;
 
      switch(column){
-	   case ColumnType::HEIGHT: 
-	     for (int i = scroll; i < scroll + lenght; ++i){
-		   ret.emplace_back(table[*(columnHeight.begin() + i)]);
-		 }	
-		 break;
+       case ColumnType::HEIGHT: 
+         for (int i = scroll; i < scroll + lenght; ++i){
+           ret.emplace_back(table[*(columnHeight.begin() + i)]);
+         }    
+         break;
        case ColumnType::SIZE: 
-	     for (int i = scroll; i < scroll + lenght; ++i){
-		   ret.emplace_back(table[*(columnSize.begin() + i)]);
-		 }	
-		 break;
+         for (int i = scroll; i < scroll + lenght; ++i){
+           ret.emplace_back(table[*(columnSize.begin() + i)]);
+         }    
+         break;
        default: 
-	     for (int i = scroll; i < scroll + lenght; ++i){
-		   ret.emplace_back(table[*(columnName.begin() + i)]);
-		 }
-		 break;        
-	 }
-	 
-	 return ret;	 
+         for (int i = scroll; i < scroll + lenght; ++i){
+           ret.emplace_back(table[*(columnName.begin() + i)]);
+         }
+         break;        
+     }
+     
+     return ret;     
   }  
 
 
@@ -183,54 +183,54 @@ package bigtable;
 message HostMessage {
     enum MessageType {
         ADD_RECORD = 1;
-		UPDATE_RECORD = 2;
-		DELETE_RECORD = 3;
-		RECORDS_REQUEST = 4;
-		RECORDS_RESPONSE = 5;
+        UPDATE_RECORD = 2;
+        DELETE_RECORD = 3;
+        RECORDS_REQUEST = 4;
+        RECORDS_RESPONSE = 5;
     }
     
     /* Тип столбца*/
     enum ColumnType {
         COLUMN_HEIGHT = 1;
         COLUMN_SIZE = 2;
-		COLUMN_NAME = 3;
+        COLUMN_NAME = 3;
     }
     
-	/* Запись */
+    /* Запись */
     message Record {
         required uint64 id = 1;
         required int32 height = 2;
         required double size = 3;
-		required string name = 4;
-	}
-	 
+        required string name = 4;
+    }
+     
     /* Запрос на добавление записи */
     message AddRecordRequest {
         required Record rec = 1;
-	}
-	
-	/* Запрос на обновление записи */
+    }
+    
+    /* Запрос на обновление записи */
     message UpdateRecordRequest {
         required Record rec = 1;
-	}
+    }
     
-	/* Запрос на удаление записи */
+    /* Запрос на удаление записи */
     message DeleteRecordRequest {
         required Record rec = 1;
-	}
-	
-	/* Запрос на получение записей */
+    }
+    
+    /* Запрос на получение записей */
     message RecordsRequest{
         required int scroll = 1;
-		required int lenght = 2;
-		required ColumnType column = 3;
-	}
-	
-	/* Ответ на получение записей */
+        required int lenght = 2;
+        required ColumnType column = 3;
+    }
+    
+    /* Ответ на получение записей */
     message RecordsResponse {
         repeated Record recs = 1;
-	}
-	
+    }
+    
     required MessageType type = 1;
     optional AddRecordRequest add_record_request = 2;
     optional UpdateRecordRequest update_record_request = 3;
